@@ -36,6 +36,7 @@ from mulan.model import StructEsmForMaskedLM
 from mulan.pdb_utils import AnglesFromStructure, getStructureObject
 from mulan.tokenizer import Tokenizer as StructureTokenizer
 from mulan.utils import get_foldseek_tokenizer
+from mulan.model_utils import auto_detect_base_tokenizer
 
 try:
     from importlib.metadata import distributions
@@ -202,6 +203,7 @@ def load_model_and_tokenizers(
 
     model = StructEsmForMaskedLM.from_pretrained(
         model_id_or_path,
+        device_map="auto" if torch.cuda.is_available() else None,
         num_struct_embeddings_layers=num_struct_embeddings_layers,
         struct_data_dim=7,
         use_struct_embeddings=use_struct_embeddings,
@@ -214,14 +216,23 @@ def load_model_and_tokenizers(
     model.eval()
     model.to(device)
 
-    base_checkpoint = esm_checkpoint or _auto_base_checkpoint(
-        config=model.config, use_foldseek_sequences=use_foldseek_sequences, foldseek_base=foldseek_base
-    )
-
-    if base_checkpoint:
-        tokenizer = AutoTokenizer.from_pretrained(base_checkpoint)
+    tokenizer = None
+    if esm_checkpoint:
+        tokenizer = AutoTokenizer.from_pretrained(esm_checkpoint)
     else:
-        tokenizer = AutoTokenizer.from_pretrained(model_id_or_path)
+        try:
+            tokenizer = auto_detect_base_tokenizer(
+                model.config,
+                use_foldseek_sequences=use_foldseek_sequences,
+            )
+        except Exception:
+            tokenizer = None
+
+    if tokenizer is None:
+        base_checkpoint = _auto_base_checkpoint(
+            config=model.config, use_foldseek_sequences=use_foldseek_sequences, foldseek_base=foldseek_base
+        )
+        tokenizer = AutoTokenizer.from_pretrained(base_checkpoint or model_id_or_path)
 
     return model, tokenizer, fs_tokenizer, device
 

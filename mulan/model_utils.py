@@ -75,13 +75,6 @@ class StructEmbeddings(nn.Module):
             vocab_list=None,
             position_embedding_type='rotary',
         )
-        # `transformers` (newer versions) routes attention via `config._attn_implementation`.
-        # When constructing `EsmEncoder` directly from a raw `EsmConfig`, this field may be unset,
-        # causing `KeyError: None` in `ALL_ATTENTION_FUNCTIONS[config._attn_implementation]`.
-        if getattr(esm_config, "_attn_implementation", None) is None:
-            esm_config._attn_implementation = "eager"
-        if getattr(esm_config, "attn_implementation", None) is None:
-            esm_config.attn_implementation = "eager"
         self.encoder = EsmEncoder(esm_config)
         self.dtype = dtype
         self.mask_angle_inputs_with_plddt = mask_angle_inputs_with_plddt
@@ -170,13 +163,7 @@ class StructEsmEmbeddings(EsmEmbeddings):
         if position_ids is None:
             if input_ids is not None:
                 # Create the position ids from the input token ids. Any padded tokens remain padded.
-                # `transformers` has changed this helper's signature across versions.
-                try:
-                    position_ids = create_position_ids_from_input_ids(
-                        input_ids, self.padding_idx, past_key_values_length
-                    )
-                except TypeError:
-                    position_ids = create_position_ids_from_input_ids(input_ids, self.padding_idx)
+                position_ids = create_position_ids_from_input_ids(input_ids, self.padding_idx, past_key_values_length)
             else:
                 position_ids = self.create_position_ids_from_inputs_embeds(inputs_embeds)
 
